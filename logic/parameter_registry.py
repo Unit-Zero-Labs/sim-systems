@@ -32,6 +32,7 @@ class ParameterCategory(Enum):
     AGENT_BEHAVIOR = "agent_behavior"
     UTILITY = "utility"
     FINANCIAL = "financial"
+    VE_EMISSIONS = "ve_emissions"
     CUSTOM = "custom"
 
 
@@ -108,6 +109,16 @@ class ParameterRegistry:
             ],
             ParameterCategory.FINANCIAL: [
                 r'.*income.*', r'.*revenue.*', r'.*cost.*', r'.*expense.*', r'.*cash.*'
+            ],
+            ParameterCategory.VE_EMISSIONS: [
+                r'.*emission.*', r'.*emitted.*', r'.*tvl.*', r'.*total.*value.*locked.*',
+                r'.*borrow.*', r'.*utilization.*', r'.*step.*', r'.*revenue.*',
+                r'.*protocol.*fee.*', r'.*admin.*fee.*', r'.*reserve.*fee.*',
+                r'.*liquidation.*fee.*', r'.*vetoken.*', r'.*ve.*token.*',
+                r'.*base.*.*rate.*', r'.*multiplier.*', r'.*kink.*', r'.*jump.*',
+                r'.*growth.*', r'.*final.*', r'.*target.*', r'.*borrowed.*step.*size.*',
+                r'.*emissions.*step.*up.*', r'.*monthly.*emissions.*rate.*',
+                r'.*weekly.*emissions.*rate.*', r'.*lender.*', r'.*blocks.*per.*'
             ]
         }
     

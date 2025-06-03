@@ -9,7 +9,7 @@ from tokenomics_data import TokenomicsData, generate_data_from_radcad_inputs
 from simulate import TokenomicsSimulation
 from logic.state_manager import StateManager
 from logic.data_manager import DataManager
-from logic.parameter_registry import parameter_registry
+from logic.parameter_registry import parameter_registry, ParameterCategory
 from visualization.dynamic_components import create_dynamic_ui_generator
 from utils.config import get_ui_config
 from utils.error_handler import ErrorHandler
@@ -53,8 +53,8 @@ def main():
     )
     
     # Create tabs
-    tab_load_data, tab_data_tables, tab_simulation = st.tabs([
-        "Load Data", "Data Tables", "Simulation"
+    tab_load_data, tab_data_tables, tab_simulation, tab_scenario_analysis = st.tabs([
+        "Load Data", "Data Tables", "Simulation", "Scenario Analysis"
     ])
     
     with tab_load_data:
@@ -266,6 +266,126 @@ def main():
                 st.info("💡 **Welcome!** Upload a CSV file with parameters to start simulating your tokenomics.")
         else:
             st.info("Please upload and process a radCAD Inputs CSV in the 'Load Data' tab to run simulations.")
+
+    with tab_scenario_analysis:
+        st.header("🎯 Scenario Analysis - Voted-Escrow Emissions Model")
+        
+        data_for_scenario = StateManager.get_data()
+        
+        st.markdown("""
+        **Voted-Escrow Token Emissions Model**: Advanced emissions modeling based on protocol KPIs and step-based triggers.
+        
+        This model enables you to:
+        • **Model emissions tied to TVL and borrowing growth**
+        • **Analyze Revenue-to-Emissions ratios for sustainability**
+        • **Run Monte Carlo simulations with parameter uncertainty**
+        • **Optimize emission strategies for protocol growth**
+        
+        The model automatically adapts to parameters from your uploaded CSV or allows manual configuration.
+        """)
+        
+        # Import VE emissions components
+        try:
+            from visualization.ve_emissions_components import (
+                display_ve_emissions_parameter_inputs,
+                display_ve_emissions_monte_carlo_controls,
+                display_ve_emissions_results,
+                create_ve_emissions_model_from_inputs
+            )
+            
+            # Check if we have VE emissions parameters from uploaded CSV
+            ve_params_available = False
+            if data_for_scenario is not None:
+                ve_params = parameter_registry.get_parameters_by_category(ParameterCategory.VE_EMISSIONS)
+                ve_params_available = len(ve_params) > 5
+                
+                if ve_params_available:
+                    st.success(f"✅ **VE Emissions Parameters Detected**: Found {len(ve_params)} parameters from your CSV")
+                    with st.expander("📋 Detected VE Emissions Parameters", expanded=False):
+                        for param_name, param_def in ve_params.items():
+                            st.write(f"• **{param_name}**: {param_def.value} ({param_def.category.value})")
+                else:
+                    st.info("ℹ️ **Manual Configuration**: No VE emissions parameters detected in CSV. Using manual inputs.")
+            else:
+                st.info("ℹ️ **Manual Configuration**: No data uploaded. Configure parameters manually below.")
+            
+            # Parameter input section
+            with st.expander("🎛️ Model Configuration", expanded=True):
+                ve_params = display_ve_emissions_parameter_inputs()
+            
+            # Monte Carlo controls
+            with st.expander("🎲 Monte Carlo Configuration", expanded=False):
+                mc_config = display_ve_emissions_monte_carlo_controls()
+            
+            # Analysis controls
+            st.subheader("🚀 Run Analysis")
+            
+            col1, col2, col3 = st.columns([2, 2, 1])
+            
+            with col1:
+                run_base_case = st.button(
+                    "📈 Run Base Case Analysis",
+                    type="secondary",
+                    help="Run deterministic analysis with current parameters"
+                )
+            
+            with col2:
+                run_monte_carlo = st.button(
+                    "🎲 Run Monte Carlo Analysis",
+                    type="primary",
+                    help="Run probabilistic analysis with parameter uncertainty"
+                )
+            
+            with col3:
+                if st.button("🔄 Reset"):
+                    st.rerun()
+            
+            # Run analysis based on button clicks
+            if run_base_case or run_monte_carlo:
+                try:
+                    # Create VE emissions model
+                    ve_model = create_ve_emissions_model_from_inputs(ve_params)
+                    
+                    # Display results
+                    display_ve_emissions_results(
+                        ve_model=ve_model,
+                        mc_config=mc_config,
+                        run_monte_carlo=run_monte_carlo
+                    )
+                    
+                except Exception as e:
+                    st.error(f"Error running VE emissions analysis: {str(e)}")
+                    st.exception(e)
+            
+            # Show example if no analysis has been run
+            elif not run_base_case and not run_monte_carlo:
+                st.info("👆 **Ready to analyze!** Configure your parameters above and click 'Run Base Case Analysis' or 'Run Monte Carlo Analysis' to begin.")
+                
+                # Show parameter summary
+                if ve_params:
+                    with st.expander("📊 Current Parameter Summary", expanded=False):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("**Protocol Metrics:**")
+                            st.write(f"• Initial TVL: ${ve_params['initial_tvl']:,.0f}")
+                            st.write(f"• Target TVL: ${ve_params['final_tvl']:,.0f}")
+                            st.write(f"• Initial Borrow: ${ve_params['initial_borrow']:,.0f}")
+                            st.write(f"• Target Borrow: ${ve_params['final_borrow']:,.0f}")
+                        
+                        with col2:
+                            st.write("**Emissions Configuration:**")
+                            st.write(f"• Total Budget: {ve_params['total_emissions_budget']:,.0f} tokens")
+                            st.write(f"• Base Rate: {ve_params['base_monthly_rate']:.1%}/month")
+                            st.write(f"• Step Size: {ve_params['borrowed_step_size']:.1%}")
+                            st.write(f"• Token Price: ${ve_params['token_price']:.3f}")
+        
+        except ImportError as e:
+            st.error("VE Emissions components not available. Please check the implementation.")
+            st.exception(e)
+        except Exception as e:
+            st.error(f"Error in Scenario Analysis tab: {str(e)}")
+            st.exception(e)
 
 
 if __name__ == "__main__":
