@@ -8,6 +8,7 @@ import pandas as pd
 import random
 import streamlit as st
 from logic.parameter_registry import ParameterRegistry, ParameterCategory
+from logic.ve_emissions_model import create_ve_emissions_config_from_params, VEEmissionsModel
 
 
 class PolicyFactory:
@@ -26,7 +27,8 @@ class PolicyFactory:
             "points_campaign": self._create_points_campaign_policy,
             "custom_utility": self._create_custom_utility_policy,
             "custom_agent_behavior": self._create_custom_agent_behavior_policy,
-            "enhanced_staking": self._create_enhanced_staking_policy
+            "enhanced_staking": self._create_enhanced_staking_policy,
+            "ve_emissions": self._create_ve_emissions_policy
         }
     
     def discover_and_create_policies(self, data) -> Dict[str, Callable]:
@@ -50,6 +52,11 @@ class PolicyFactory:
             points_params = self.registry.get_parameters_by_category(ParameterCategory.POINTS_CAMPAIGN)
             if points_params and len(points_params) > 3:  # Need substantial points parameters
                 created_policies["points_campaign"] = self._create_points_campaign_policy(data)
+            
+            # Check for VE emissions parameters
+            ve_params = self.registry.get_parameters_by_category(ParameterCategory.VE_EMISSIONS)
+            if ve_params and len(ve_params) > 5:  # Need substantial VE emissions parameters
+                created_policies["ve_emissions"] = self._create_ve_emissions_policy(data)
             
             # Check for custom utility mechanisms
             utility_params = self.registry.get_parameters_by_category(ParameterCategory.UTILITY)
@@ -368,6 +375,83 @@ class PolicyFactory:
         
         return p_enhanced_staking
     
+    def _create_ve_emissions_policy(self, data) -> Callable:
+        """Create VE emissions policy."""
+        # Get VE emissions parameters
+        ve_params = self.registry.get_parameters_by_category(ParameterCategory.VE_EMISSIONS)
+        
+        def p_ve_emissions(params, substep, state_history, prev_state):
+            """Policy function for VE emissions."""
+            time_step = prev_state["time_step"]
+            
+            # Create VE emissions configuration from parameters
+            ve_config_params = {}
+            
+            # Map registry parameters to VE config
+            param_mapping = {
+                'total_ion_emitted': 'total_emissions_budget',
+                'base_monthly_emissions_rate': 'base_monthly_rate',
+                'borrowed_step_size': 'borrowed_step_size',
+                'emissions_step_up': 'emissions_step_up',
+                'target_utilization_rate': 'target_utilization_rate',
+                'tvl': 'initial_tvl',
+                'final_tvl': 'final_tvl',
+                'borrow': 'initial_borrow',
+                'final_borrowed': 'final_borrow',
+                'protocol_fee': 'protocol_fee',
+                'token_price': 'token_price',
+                'mom_tvl_growth': 'monthly_tvl_growth',
+                'mom_borrow_growth': 'monthly_borrow_growth'
+            }
+            
+            # Extract parameters from registry and runtime params
+            for registry_key, config_key in param_mapping.items():
+                if registry_key in params:
+                    ve_config_params[config_key] = params[registry_key]
+                elif registry_key in ve_params:
+                    ve_config_params[config_key] = ve_params[registry_key].value
+            
+            # Create VE emissions model if we have sufficient parameters
+            if len(ve_config_params) > 5:
+                try:
+                    config = create_ve_emissions_config_from_params(ve_config_params)
+                    ve_model = VEEmissionsModel(config)
+                    
+                    # Generate time series data
+                    time_series = ve_model.generate_time_series()
+                    
+                    # Get emissions for current time step
+                    if time_step < len(time_series):
+                        current_data = time_series.iloc[time_step]
+                        
+                        return {
+                            "ve_emissions_per_month": current_data['emissions_per_month'],
+                            "ve_cumulative_emissions": current_data['cumulative_emissions'],
+                            "ve_protocol_revenue": current_data['protocol_revenue'],
+                            "ve_revenue_emissions_ratio": current_data['revenue_to_emissions_ratio'],
+                            "ve_tvl": current_data['tvl'],
+                            "ve_borrow_amount": current_data['borrow_amount'],
+                            "ve_utilization_rate": current_data['utilization_rate'],
+                            "ve_emission_step": current_data['emission_step']
+                        }
+                except Exception as e:
+                    # If VE model fails, return zeros
+                    pass
+            
+            # Default return if no VE emissions
+            return {
+                "ve_emissions_per_month": 0,
+                "ve_cumulative_emissions": 0,
+                "ve_protocol_revenue": 0,
+                "ve_revenue_emissions_ratio": 0,
+                "ve_tvl": 0,
+                "ve_borrow_amount": 0,
+                "ve_utilization_rate": 0,
+                "ve_emission_step": 0
+            }
+        
+        return p_ve_emissions
+    
     def _create_agent_influenced_price_policy(self, data) -> Callable:
         """Create agent-influenced price policy that incorporates agent behavior."""
         agent_params = self.registry.get_parameters_by_category(ParameterCategory.AGENT_BEHAVIOR)
@@ -452,7 +536,15 @@ class PolicyFactory:
             'total_points_issued': self._s_update_points_issued,
             'total_tokens_converted': self._s_update_tokens_converted,
             'total_tokens_burned': self._s_update_tokens_burned,
-            'staking_rewards': self._s_update_staking_rewards
+            'staking_rewards': self._s_update_staking_rewards,
+            've_emissions_per_month': self._s_update_ve_emissions_per_month,
+            've_cumulative_emissions': self._s_update_ve_cumulative_emissions,
+            've_protocol_revenue': self._s_update_ve_protocol_revenue,
+            've_revenue_emissions_ratio': self._s_update_ve_revenue_emissions_ratio,
+            've_tvl': self._s_update_ve_tvl,
+            've_borrow_amount': self._s_update_ve_borrow_amount,
+            've_utilization_rate': self._s_update_ve_utilization_rate,
+            've_emission_step': self._s_update_ve_emission_step
         }
     
     def _s_update_supply(self, params, substep, state_history, prev_state, policy_input):
@@ -517,6 +609,54 @@ class PolicyFactory:
         staking_rewards = policy_input.get("staking_rewards", 0)
         current_rewards = prev_state.get("staking_rewards", 0)
         return ("staking_rewards", current_rewards + staking_rewards)
+    
+    def _s_update_ve_emissions_per_month(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE emissions per month."""
+        ve_emissions_per_month = policy_input.get("ve_emissions_per_month", 0)
+        current_ve_emissions_per_month = prev_state.get("ve_emissions_per_month", 0)
+        return ("ve_emissions_per_month", current_ve_emissions_per_month + ve_emissions_per_month)
+    
+    def _s_update_ve_cumulative_emissions(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE cumulative emissions."""
+        ve_cumulative_emissions = policy_input.get("ve_cumulative_emissions", 0)
+        current_ve_cumulative_emissions = prev_state.get("ve_cumulative_emissions", 0)
+        return ("ve_cumulative_emissions", current_ve_cumulative_emissions + ve_cumulative_emissions)
+    
+    def _s_update_ve_protocol_revenue(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE protocol revenue."""
+        ve_protocol_revenue = policy_input.get("ve_protocol_revenue", 0)
+        current_ve_protocol_revenue = prev_state.get("ve_protocol_revenue", 0)
+        return ("ve_protocol_revenue", current_ve_protocol_revenue + ve_protocol_revenue)
+    
+    def _s_update_ve_revenue_emissions_ratio(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE revenue-to-emissions ratio."""
+        ve_revenue_emissions_ratio = policy_input.get("ve_revenue_emissions_ratio", 0)
+        current_ve_revenue_emissions_ratio = prev_state.get("ve_revenue_emissions_ratio", 0)
+        return ("ve_revenue_emissions_ratio", current_ve_revenue_emissions_ratio + ve_revenue_emissions_ratio)
+    
+    def _s_update_ve_tvl(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE TVL."""
+        ve_tvl = policy_input.get("ve_tvl", 0)
+        current_ve_tvl = prev_state.get("ve_tvl", 0)
+        return ("ve_tvl", current_ve_tvl + ve_tvl)
+    
+    def _s_update_ve_borrow_amount(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE borrow amount."""
+        ve_borrow_amount = policy_input.get("ve_borrow_amount", 0)
+        current_ve_borrow_amount = prev_state.get("ve_borrow_amount", 0)
+        return ("ve_borrow_amount", current_ve_borrow_amount + ve_borrow_amount)
+    
+    def _s_update_ve_utilization_rate(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE utilization rate."""
+        ve_utilization_rate = policy_input.get("ve_utilization_rate", 0)
+        current_ve_utilization_rate = prev_state.get("ve_utilization_rate", 0)
+        return ("ve_utilization_rate", current_ve_utilization_rate + ve_utilization_rate)
+    
+    def _s_update_ve_emission_step(self, params, substep, state_history, prev_state, policy_input):
+        """State update function for VE emission step."""
+        ve_emission_step = policy_input.get("ve_emission_step", 0)
+        current_ve_emission_step = prev_state.get("ve_emission_step", 0)
+        return ("ve_emission_step", current_ve_emission_step + ve_emission_step)
 
 
 def create_policy_factory(registry: ParameterRegistry) -> PolicyFactory:
