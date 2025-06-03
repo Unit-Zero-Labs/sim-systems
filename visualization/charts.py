@@ -1292,3 +1292,304 @@ def plot_ve_emissions_summary_stats(mc_results: Dict[str, Any]) -> go.Figure:
     )
     
     return fig
+
+
+def plot_ve_emissions_optimization_results(
+    original_time_series: pd.DataFrame,
+    optimized_time_series: pd.DataFrame,
+    optimization_targets: Dict[str, Any]
+) -> go.Figure:
+    """
+    Plot optimization results comparing original vs optimized emissions strategy.
+    
+    Args:
+        original_time_series: Time series from original configuration
+        optimized_time_series: Time series from optimized configuration
+        optimization_targets: Target achievement metrics
+        
+    Returns:
+        Plotly figure object
+    """
+    # Create subplot figure with 2 rows, 2 columns
+    from plotly.subplots import make_subplots
+    
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=[
+            "Revenue-to-Emissions Ratio Comparison",
+            "Cumulative Emissions Budget Usage",
+            "Monthly Protocol Revenue",
+            "Emissions Rate Per Month"
+        ],
+        specs=[[{"secondary_y": False}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}]],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.10
+    )
+    
+    # Revenue-to-Emissions Ratio (top-left)
+    fig.add_trace(
+        go.Scatter(
+            x=original_time_series['month'],
+            y=original_time_series['revenue_to_emissions_ratio'].clip(0, 1000),
+            mode='lines',
+            name='Original Strategy',
+            line=dict(color='red', width=2, dash='dash'),
+            legendgroup='original'
+        ),
+        row=1, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=optimized_time_series['month'],
+            y=optimized_time_series['revenue_to_emissions_ratio'].clip(0, 1000),
+            mode='lines',
+            name='Optimized Strategy',
+            line=dict(color='green', width=3),
+            legendgroup='optimized'
+        ),
+        row=1, col=1
+    )
+    
+    # Add target line
+    if 'target_ratio' in optimization_targets:
+        fig.add_hline(
+            y=optimization_targets['target_ratio'],
+            line_dash="dot",
+            line_color="blue",
+            annotation_text=f"Target: {optimization_targets['target_ratio']:.1f}",
+            row=1, col=1
+        )
+    
+    # Cumulative Emissions (top-right)
+    original_budget_pct = (original_time_series['cumulative_emissions'] / 
+                          original_time_series['cumulative_emissions'].iloc[-1]) * 100
+    optimized_budget_pct = (optimized_time_series['cumulative_emissions'] / 
+                           optimized_time_series['cumulative_emissions'].iloc[-1]) * 100
+    
+    fig.add_trace(
+        go.Scatter(
+            x=original_time_series['month'],
+            y=original_budget_pct,
+            mode='lines',
+            name='Original Budget Usage',
+            line=dict(color='red', width=2, dash='dash'),
+            legendgroup='original',
+            showlegend=False
+        ),
+        row=1, col=2
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=optimized_time_series['month'],
+            y=optimized_budget_pct,
+            mode='lines',
+            name='Optimized Budget Usage',
+            line=dict(color='green', width=3),
+            legendgroup='optimized',
+            showlegend=False
+        ),
+        row=1, col=2
+    )
+    
+    # Monthly Revenue (bottom-left)
+    fig.add_trace(
+        go.Scatter(
+            x=original_time_series['month'],
+            y=original_time_series['protocol_revenue'],
+            mode='lines',
+            name='Original Revenue',
+            line=dict(color='red', width=2, dash='dash'),
+            legendgroup='original',
+            showlegend=False
+        ),
+        row=2, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=optimized_time_series['month'],
+            y=optimized_time_series['protocol_revenue'],
+            mode='lines',
+            name='Optimized Revenue',
+            line=dict(color='green', width=3),
+            legendgroup='optimized',
+            showlegend=False
+        ),
+        row=2, col=1
+    )
+    
+    # Monthly Emissions (bottom-right)
+    fig.add_trace(
+        go.Scatter(
+            x=original_time_series['month'],
+            y=original_time_series['emissions_per_month'],
+            mode='lines',
+            name='Original Emissions',
+            line=dict(color='red', width=2, dash='dash'),
+            legendgroup='original',
+            showlegend=False
+        ),
+        row=2, col=2
+    )
+    
+    fig.add_trace(
+        go.Scatter(
+            x=optimized_time_series['month'],
+            y=optimized_time_series['emissions_per_month'],
+            mode='lines',
+            name='Optimized Emissions',
+            line=dict(color='green', width=3),
+            legendgroup='optimized',
+            showlegend=False
+        ),
+        row=2, col=2
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title="🎯 Optimization Results: Before vs After",
+        height=700,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    
+    # Update y-axis labels
+    fig.update_yaxes(title_text="Ratio", row=1, col=1)
+    fig.update_yaxes(title_text="Budget Used (%)", row=1, col=2)
+    fig.update_yaxes(title_text="Revenue ($)", row=2, col=1)
+    fig.update_yaxes(title_text="Tokens", row=2, col=2)
+    
+    # Update x-axis labels
+    fig.update_xaxes(title_text="Month", row=2, col=1)
+    fig.update_xaxes(title_text="Month", row=2, col=2)
+    
+    return apply_chart_styling(fig)
+
+
+def plot_ve_emissions_scenario_comparison(
+    time_series_comparison: Dict[str, pd.DataFrame]
+) -> go.Figure:
+    """
+    Plot scenario comparison with multiple emission strategies.
+    
+    Args:
+        time_series_comparison: Dictionary of scenario name to time series data
+        
+    Returns:
+        Plotly figure object
+    """
+    from plotly.subplots import make_subplots
+    
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=[
+            "Revenue-to-Emissions Ratio by Scenario",
+            "Cumulative Emissions by Scenario", 
+            "Monthly Revenue by Scenario",
+            "Budget Usage Efficiency"
+        ],
+        specs=[[{"secondary_y": False}, {"secondary_y": False}],
+               [{"secondary_y": False}, {"secondary_y": False}]],
+        vertical_spacing=0.12,
+        horizontal_spacing=0.10
+    )
+    
+    # Color palette for scenarios
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+    
+    scenario_names = list(time_series_comparison.keys())
+    
+    for i, (scenario_name, ts_data) in enumerate(time_series_comparison.items()):
+        color = colors[i % len(colors)]
+        
+        # Revenue-to-Emissions Ratio (top-left)
+        fig.add_trace(
+            go.Scatter(
+                x=ts_data['month'],
+                y=ts_data['revenue_to_emissions_ratio'].clip(0, 1000),
+                mode='lines',
+                name=scenario_name,
+                line=dict(color=color, width=2),
+                legendgroup=scenario_name
+            ),
+            row=1, col=1
+        )
+        
+        # Cumulative Emissions (top-right)
+        fig.add_trace(
+            go.Scatter(
+                x=ts_data['month'],
+                y=ts_data['cumulative_emissions'],
+                mode='lines',
+                name=scenario_name,
+                line=dict(color=color, width=2),
+                legendgroup=scenario_name,
+                showlegend=False
+            ),
+            row=1, col=2
+        )
+        
+        # Monthly Revenue (bottom-left)
+        fig.add_trace(
+            go.Scatter(
+                x=ts_data['month'],
+                y=ts_data['protocol_revenue'],
+                mode='lines',
+                name=scenario_name,
+                line=dict(color=color, width=2),
+                legendgroup=scenario_name,
+                showlegend=False
+            ),
+            row=2, col=1
+        )
+        
+        # Budget Usage Efficiency (bottom-right)
+        # Calculate budget usage percentage over time
+        final_cumulative = ts_data['cumulative_emissions'].iloc[-1]
+        budget_pct = (ts_data['cumulative_emissions'] / final_cumulative * 100) if final_cumulative > 0 else ts_data['cumulative_emissions'] * 0
+        
+        fig.add_trace(
+            go.Scatter(
+                x=ts_data['month'],
+                y=budget_pct,
+                mode='lines',
+                name=scenario_name,
+                line=dict(color=color, width=2),
+                legendgroup=scenario_name,
+                showlegend=False
+            ),
+            row=2, col=2
+        )
+    
+    # Update layout
+    fig.update_layout(
+        title="📊 Emission Strategy Scenario Comparison",
+        height=700,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    
+    # Update y-axis labels
+    fig.update_yaxes(title_text="Ratio", row=1, col=1)
+    fig.update_yaxes(title_text="Tokens", row=1, col=2)
+    fig.update_yaxes(title_text="Revenue ($)", row=2, col=1)
+    fig.update_yaxes(title_text="Budget Used (%)", row=2, col=2)
+    
+    # Update x-axis labels
+    fig.update_xaxes(title_text="Month", row=2, col=1)
+    fig.update_xaxes(title_text="Month", row=2, col=2)
+    
+    return apply_chart_styling(fig)

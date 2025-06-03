@@ -324,14 +324,14 @@ def main():
             
             with col1:
                 run_base_case = st.button(
-                    "📈 Run Base Case Analysis",
+                    "Run Base Case Analysis",
                     type="secondary",
                     help="Run deterministic analysis with current parameters"
                 )
             
             with col2:
                 run_monte_carlo = st.button(
-                    "🎲 Run Monte Carlo Analysis",
+                    f"Run Simulation at {mc_config['num_runs']} Steps",
                     type="primary",
                     help="Run probabilistic analysis with parameter uncertainty"
                 )

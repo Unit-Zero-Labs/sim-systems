@@ -34,43 +34,46 @@ def display_ve_emissions_parameter_inputs() -> Dict[str, Any]:
         # TVL parameters
         initial_tvl = st.number_input(
             "Initial TVL ($)",
-            min_value=1_000_000.0,
-            max_value=10_000_000_000.0,
-            value=float(ve_params.get('tvl', {}).get('value', 150_000_000)) if 'tvl' in ve_params else 150_000_000.0,
-            step=1_000_000.0,
+            min_value=10_000.0,
+            max_value=5_000_000.0,
+            value=float(ve_params.get('tvl', {}).get('value', 500_000)) if 'tvl' in ve_params else 500_000.0,
+            step=10_000.0,
             format="%.0f",
-            help="Total Value Locked at protocol launch"
+            help="Total Value Locked at protocol launch - typically $100K-$1M for new protocols"
         )
         
         final_tvl = st.number_input(
             "Target TVL ($)",
             min_value=initial_tvl,
-            max_value=50_000_000_000.0,
-            value=float(ve_params.get('final_tvl', {}).get('value', 1_000_000_000)) if 'final_tvl' in ve_params else 1_000_000_000.0,
-            step=10_000_000.0,
+            max_value=500_000_000.0,
+            value=float(ve_params.get('final_tvl', {}).get('value', 50_000_000)) if 'final_tvl' in ve_params else 50_000_000.0,
+            step=1_000_000.0,
             format="%.0f",
-            help="Target TVL to reach over time"
+            help="Target TVL to reach over 3-5 years of growth"
         )
         
         # Borrowing parameters
         initial_borrow = st.number_input(
             "Initial Borrow Amount ($)",
-            min_value=1_000_000.0,
-            max_value=initial_tvl * 0.9,
-            value=float(ve_params.get('borrow', {}).get('value', 40_000_000)) if 'borrow' in ve_params else 40_000_000.0,
-            step=1_000_000.0,
+            min_value=1_000.0,
+            max_value=initial_tvl * 0.8,
+            value=float(ve_params.get('borrow', {}).get('value', 100_000)) if 'borrow' in ve_params else 100_000.0,
+            step=5_000.0,
             format="%.0f",
-            help="Initial borrowing volume"
+            help="Initial borrowing volume - typically 10-30% of initial TVL"
         )
         
         final_borrow = st.number_input(
             "Target Borrow Amount ($)",
             min_value=initial_borrow,
-            max_value=final_tvl * 0.9,
-            value=float(ve_params.get('final_borrowed', {}).get('value', 400_000_000)) if 'final_borrowed' in ve_params else 400_000_000.0,
-            step=10_000_000.0,
+            max_value=final_tvl * 0.8,
+            value=min(
+                float(ve_params.get('final_borrowed', {}).get('value', 20_000_000)) if 'final_borrowed' in ve_params else 20_000_000.0,
+                final_tvl * 0.8
+            ),
+            step=500_000.0,
             format="%.0f",
-            help="Target borrowing volume"
+            help="Target borrowing volume at maturity"
         )
         
         # Growth rates
@@ -100,23 +103,23 @@ def display_ve_emissions_parameter_inputs() -> Dict[str, Any]:
         # Emissions budget
         total_emissions_budget = st.number_input(
             "Total Emissions Budget",
-            min_value=1_000_000.0,
-            max_value=10_000_000_000.0,
-            value=float(ve_params.get('total_ion_emitted', {}).get('value', 300_000_000)) if 'total_ion_emitted' in ve_params else 300_000_000.0,
-            step=1_000_000.0,
+            min_value=100_000.0,
+            max_value=100_000_000.0,
+            value=float(ve_params.get('total_ion_emitted', {}).get('value', 10_000_000)) if 'total_ion_emitted' in ve_params else 10_000_000.0,
+            step=100_000.0,
             format="%.0f",
-            help="Total token emissions budget"
+            help="Total token emissions budget for incentives - typically 10-30% of total supply"
         )
         
         # Emission rates
         base_monthly_rate = st.slider(
             "Base Monthly Emission Rate",
             min_value=0.001,
-            max_value=0.05,
-            value=float(ve_params.get('base_monthly_emissions_rate', {}).get('value', 0.01)) if 'base_monthly_emissions_rate' in ve_params else 0.01,
+            max_value=0.02,
+            value=float(ve_params.get('base_monthly_emissions_rate', {}).get('value', 0.005)) if 'base_monthly_emissions_rate' in ve_params else 0.005,
             step=0.001,
             format="%.3f",
-            help="Base monthly emission rate as % of total budget"
+            help="Base monthly emission rate as % of total budget - start conservative"
         )
         
         # Step configuration
@@ -154,12 +157,12 @@ def display_ve_emissions_parameter_inputs() -> Dict[str, Any]:
         # Token price
         token_price = st.number_input(
             "Token Price ($)",
-            min_value=0.001,
-            max_value=100.0,
-            value=float(ve_params.get('token_price', {}).get('value', 0.05)) if 'token_price' in ve_params else 0.05,
-            step=0.001,
-            format="%.3f",
-            help="Current token price for emissions cost calculation"
+            min_value=0.01,
+            max_value=10.0,
+            value=float(ve_params.get('token_price', {}).get('value', 0.10)) if 'token_price' in ve_params else 0.10,
+            step=0.01,
+            format="%.2f",
+            help="Current token price - new protocols typically launch at $0.05-$0.50"
         )
         
         # Target utilization
@@ -265,7 +268,7 @@ def display_ve_emissions_monte_carlo_controls() -> Dict[str, Any]:
     with uncertainty_col2:
         price_uncertainty = st.slider(
             "Token Price Uncertainty (±%)",
-            min_value=0.10,
+            min_value=0.05,
             max_value=0.50,
             value=0.30,
             step=0.05,
@@ -282,6 +285,37 @@ def display_ve_emissions_monte_carlo_controls() -> Dict[str, Any]:
             format="%.2f",
             help="Uncertainty range for protocol fee"
         )
+        
+        # Add new uncertainty parameters
+        budget_uncertainty = st.slider(
+            "Emissions Budget Uncertainty (±%)",
+            min_value=0.05,
+            max_value=0.30,
+            value=0.15,
+            step=0.05,
+            format="%.2f",
+            help="Uncertainty range for total emissions budget"
+        )
+        
+        rate_uncertainty = st.slider(
+            "Base Emission Rate Uncertainty (±%)",
+            min_value=0.10,
+            max_value=0.40,
+            value=0.20,
+            step=0.05,
+            format="%.2f",
+            help="Uncertainty range for base emission rate"
+        )
+        
+        stepup_uncertainty = st.slider(
+            "Step-Up Rate Uncertainty (±%)",
+            min_value=0.10,
+            max_value=0.50,
+            value=0.25,
+            step=0.05,
+            format="%.2f",
+            help="Uncertainty range for emissions step-up rate"
+        )
     
     return {
         'num_runs': num_runs,
@@ -292,7 +326,10 @@ def display_ve_emissions_monte_carlo_controls() -> Dict[str, Any]:
             'monthly_tvl_growth': tvl_uncertainty,
             'monthly_borrow_growth': borrow_uncertainty,
             'token_price': price_uncertainty,
-            'protocol_fee': fee_uncertainty
+            'protocol_fee': fee_uncertainty,
+            'total_emissions_budget': budget_uncertainty,
+            'base_monthly_rate': rate_uncertainty,
+            'emissions_step_up': stepup_uncertainty
         }
     }
 
@@ -342,44 +379,69 @@ def display_ve_emissions_results(
             with col1:
                 if 'revenue_to_emissions_ratio' in final_data.columns:
                     final_ratio = final_data['revenue_to_emissions_ratio']
-                    st.metric(
-                        "Final Rev/Emissions Ratio",
-                        f"{final_ratio.mean():.2f}",
-                        delta=f"±{final_ratio.std():.2f}"
-                    )
+                    # Filter out extreme values for display
+                    filtered_ratio = final_ratio[(final_ratio >= 0) & (final_ratio <= 1000)]
+                    if len(filtered_ratio) > 0:
+                        mean_ratio = filtered_ratio.mean()
+                        std_ratio = filtered_ratio.std()
+                        if np.isfinite(mean_ratio) and np.isfinite(std_ratio):
+                            st.metric(
+                                "Final Rev/Emissions Ratio",
+                                f"{mean_ratio:.2f}",
+                                delta=f"±{std_ratio:.2f}"
+                            )
+                        else:
+                            st.metric("Final Rev/Emissions Ratio", "N/A - Check parameters")
+                    else:
+                        st.metric("Final Rev/Emissions Ratio", "N/A - Extreme values")
                 else:
                     st.metric("Final Rev/Emissions Ratio", "N/A")
             
             with col2:
                 if 'cumulative_emissions' in final_data.columns:
                     final_emissions = final_data['cumulative_emissions']
-                    st.metric(
-                        "Total Emissions",
-                        f"{final_emissions.mean():,.0f}",
-                        delta=f"±{final_emissions.std():,.0f}"
-                    )
+                    mean_emissions = final_emissions.mean()
+                    std_emissions = final_emissions.std()
+                    if np.isfinite(mean_emissions) and np.isfinite(std_emissions):
+                        st.metric(
+                            "Total Emissions",
+                            f"{mean_emissions:,.0f}",
+                            delta=f"±{std_emissions:,.0f}"
+                        )
+                    else:
+                        st.metric("Total Emissions", "N/A")
                 else:
                     st.metric("Total Emissions", "N/A")
             
             with col3:
                 if 'protocol_revenue' in final_data.columns:
                     final_revenue = final_data['protocol_revenue']
-                    st.metric(
-                        "Final Monthly Revenue",
-                        f"${final_revenue.mean():,.0f}",
-                        delta=f"±${final_revenue.std():,.0f}"
-                    )
+                    mean_revenue = final_revenue.mean()
+                    std_revenue = final_revenue.std()
+                    if np.isfinite(mean_revenue) and np.isfinite(std_revenue):
+                        st.metric(
+                            "Final Monthly Revenue",
+                            f"${mean_revenue:,.0f}",
+                            delta=f"±${std_revenue:,.0f}"
+                        )
+                    else:
+                        st.metric("Final Monthly Revenue", "N/A")
                 else:
                     st.metric("Final Monthly Revenue", "N/A")
             
             with col4:
                 if 'tvl' in final_data.columns:
                     final_tvl = final_data['tvl']
-                    st.metric(
-                        "Final TVL",
-                        f"${final_tvl.mean():,.0f}",
-                        delta=f"±${final_tvl.std():,.0f}"
-                    )
+                    mean_tvl = final_tvl.mean()
+                    std_tvl = final_tvl.std()
+                    if np.isfinite(mean_tvl) and np.isfinite(std_tvl):
+                        st.metric(
+                            "Final TVL",
+                            f"${mean_tvl:,.0f}",
+                            delta=f"±${std_tvl:,.0f}"
+                        )
+                    else:
+                        st.metric("Final TVL", "N/A")
                 else:
                     st.metric("Final TVL", "N/A")
                     
@@ -441,20 +503,52 @@ def display_ve_emissions_results(
     st.subheader("🔍 Key Insights")
     
     # Calculate insights from the data
-    avg_ratio = time_series_data['revenue_to_emissions_ratio'].mean()
-    min_ratio = time_series_data['revenue_to_emissions_ratio'].min()
+    # Filter out extreme ratio values for more meaningful insights
+    filtered_ratios = time_series_data['revenue_to_emissions_ratio'][(time_series_data['revenue_to_emissions_ratio'] >= 0) & (time_series_data['revenue_to_emissions_ratio'] <= 1000)]
+    
+    if len(filtered_ratios) > 0:
+        avg_ratio = filtered_ratios.mean()
+        min_ratio = filtered_ratios.min()
+        max_ratio = filtered_ratios.max()
+    else:
+        avg_ratio = 0
+        min_ratio = 0
+        max_ratio = 0
+    
     max_utilization = time_series_data['utilization_rate'].max()
     total_emissions_pct = (time_series_data.iloc[-1]['cumulative_emissions'] / ve_model.config.total_emissions_budget) * 100
     
+    # Calculate months with positive emissions
+    positive_emissions_months = len(time_series_data[time_series_data['emissions_per_month'] > 0])
+    emission_duration_years = positive_emissions_months / 12
+    
+    # Calculate average monthly revenue and emissions cost
+    avg_monthly_revenue = time_series_data['protocol_revenue'].mean()
+    avg_monthly_emissions_cost = time_series_data['emissions_cost_usd'].mean()
+    
     insights = [
         f"**Average Revenue-to-Emissions Ratio:** {avg_ratio:.2f}",
-        f"**Minimum Revenue-to-Emissions Ratio:** {min_ratio:.2f}",
+        f"**Revenue-to-Emissions Range:** {min_ratio:.2f} - {max_ratio:.2f}",
         f"**Peak Utilization Rate:** {max_utilization:.1%}",
-        f"**Emissions Budget Utilized:** {total_emissions_pct:.1f}%"
+        f"**Emissions Budget Utilized:** {total_emissions_pct:.1f}%",
+        f"**Emission Duration:** {emission_duration_years:.1f} years ({positive_emissions_months} months)",
+        f"**Average Monthly Revenue:** ${avg_monthly_revenue:,.0f}",
+        f"**Average Monthly Emissions Cost:** ${avg_monthly_emissions_cost:,.0f}"
     ]
     
     for insight in insights:
         st.write(f"• {insight}")
+    
+    # Add performance assessment
+    st.markdown("**Performance Assessment:**")
+    if avg_ratio > 2.0:
+        st.success("🟢 Excellent: Revenue significantly exceeds emissions cost")
+    elif avg_ratio > 1.0:
+        st.info("🟡 Good: Revenue exceeds emissions cost, sustainable model")
+    elif avg_ratio > 0.5:
+        st.warning("🟠 Moderate: Revenue partially covers emissions cost")
+    else:
+        st.error("🔴 Poor: Revenue does not cover emissions cost")
 
 
 def create_ve_emissions_model_from_inputs(params: Dict[str, Any]) -> VEEmissionsModel:
